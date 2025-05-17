@@ -14,13 +14,32 @@ if (!mongoUrl) {
 const client = new MongoClient(mongoUrl);
 let db: Db; // To be initialized after connection
 
+// Add MongoDB client event listeners
+client.on('open', () => console.error('[MongoDB] Connection event: open'));
+client.on('close', () => console.error('[MongoDB] Connection event: close'));
+client.on('error', (err) => console.error('[MongoDB] Connection event: error', err));
+client.on('timeout', (type: any) => console.error(`[MongoDB] Connection event: timeout - ${type}`));
+client.on('connectionPoolCreated', (event) => console.error('[MongoDB] Connection Pool event: created', event.address));
+client.on('connectionPoolReady', (event) => console.error('[MongoDB] Connection Pool event: ready', event.address));
+client.on('connectionPoolClosed', (event) => console.error('[MongoDB] Connection Pool event: closed', event.address));
+client.on('connectionCreated', (event) => console.error('[MongoDB] Connection Pool Connection event: created', event.address, event.connectionId));
+client.on('connectionReady', (event) => console.error('[MongoDB] Connection Pool Connection event: ready', event.address, event.connectionId));
+client.on('connectionClosed', (event) => console.error('[MongoDB] Connection Pool Connection event: closed', event.address, event.connectionId, event.reason));
+client.on('connectionCheckOutStarted', (event) => console.error('[MongoDB] Connection Pool Connection event: checkout started for address', event.address));
+client.on('connectionCheckOutFailed', (event) => console.error('[MongoDB] Connection Pool Connection event: checkout failed for address', event.address, event.reason));
+client.on('connectionCheckedOut', (event) => console.error('[MongoDB] Connection Pool Connection event: checked out from address', event.address, event.connectionId));
+client.on('connectionCheckedIn', (event) => console.error('[MongoDB] Connection Pool Connection event: checked in for address', event.address, event.connectionId));
+client.on('serverHeartbeatStarted', (event) => console.error(`[MongoDB] Heartbeat event: started for ${event.connectionId}`));
+client.on('serverHeartbeatSucceeded', (event) => console.error(`[MongoDB] Heartbeat event: succeeded for ${event.connectionId}`));
+client.on('serverHeartbeatFailed', (event) => console.error(`[MongoDB] Heartbeat event: failed for ${event.connectionId}`, event.failure));
+
 async function connectToMongo() {
     console.error("Connecting to MongoDB...");
     try {
         await client.connect();
         console.error("MongoDB client connected.");
-        db = client.db();
-        console.error("MongoDB database connected.");
+        db = client.db(); // 'db' instance created, though tools often use client.db(name)
+        console.error("MongoDB default database instance obtained.");
     } catch (error) {
         console.error("Failed to connect to MongoDB:", error);
         process.exit(1);
@@ -28,9 +47,15 @@ async function connectToMongo() {
 }
 
 const server = new McpServer({
-    name: "mongo-mcp",
+    name: "MongoDB MCP",
+    description: "MongoDB MCP",
     version: "1.0.0",
-});
+    capabilities: {
+      resources: {},
+      tools: {},
+    },
+  });
+  
 
 server.tool(
     "list_databases",
@@ -134,17 +159,24 @@ server.tool(
 async function main() {
     await connectToMongo();
     const transport = new StdioServerTransport();
+    console.error("MCP Server attempting to connect to transport...");
     await server.connect(transport);
+    console.error("MCP Server connected to transport.");
 };
 
 main().catch(error => {
     console.error("Failed to start server:", error);
-    client.close();
+    client.close().catch(closeErr => console.error("Error closing MongoDB client during main error handling:", closeErr));
     process.exit(1);
 });
 
 process.on('SIGINT', async () => {
     console.error("SIGINT received, shutting down server...");
-    await client.close();
+    try {
+        await client.close();
+        console.error("MongoDB client closed successfully due to SIGINT.");
+    } catch (err) {
+        console.error("Error closing MongoDB client during SIGINT:", err);
+    }
     process.exit(0);
 }); 
