@@ -172,3 +172,25 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Node.js / npm / yarn
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional lockfiles (uncomment if you want to ignore)
+# package-lock.json
+# yarn.lock
+
+# Yarn Plug'n'Play
+.pnp.*
+
+# Optional, common build output directory (already present in Python section but good to be aware of)
+# dist/
+# build/
+
+# Environment variables (already present in Python section but good to be aware of)
+# .env

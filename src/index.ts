@@ -1,5 +1,6 @@
 // src/index.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { MongoClient, Db } from "mongodb";
 import { z } from "zod";
 
@@ -14,10 +15,12 @@ const client = new MongoClient(mongoUrl);
 let db: Db; // To be initialized after connection
 
 async function connectToMongo() {
+    console.error("Connecting to MongoDB...");
     try {
         await client.connect();
-        console.log("Connected to MongoDB");
+        console.error("MongoDB client connected.");
         db = client.db();
+        console.error("MongoDB database connected.");
     } catch (error) {
         console.error("Failed to connect to MongoDB:", error);
         process.exit(1);
@@ -35,7 +38,8 @@ server.tool(
     z.object({}).shape,
     async () => {
         const databases = await client.db().admin().listDatabases();
-        return { structuredContent: { content: JSON.stringify(databases.databases.map((db: { name: string }) => db.name)), type: 'json' } };
+        const dbNames = databases.databases.map((db: { name: string }) => db.name);
+        return { content: [{ type: "text", text: JSON.stringify(dbNames) }] };
     }
 );
 
@@ -47,7 +51,8 @@ server.tool(
     }).shape,
     async ({ databaseName }) => {
         const collections = await client.db(databaseName).listCollections().toArray();
-        return { structuredContent: { content: JSON.stringify(collections.map((col: { name: string }) => col.name)), type: 'json' } };
+        const colNames = collections.map((col: { name: string }) => col.name);
+        return { content: [{ type: "text", text: JSON.stringify(colNames) }] };
     }
 );
 
@@ -79,7 +84,7 @@ server.tool(
             cursor = cursor.limit(limit);
         }
         const documents = await cursor.toArray();
-        return { structuredContent: { content: JSON.stringify(documents), type: 'json' } };
+        return { content: [{ type: "text", text: JSON.stringify(documents) }] };
     }
 );
 
@@ -93,7 +98,7 @@ server.tool(
     }).shape,
     async ({ databaseName, collectionName, document }) => {
         const result = await client.db(databaseName).collection(collectionName).insertOne(document);
-        return { structuredContent: { content: JSON.stringify({ insertedId: result.insertedId }), type: 'json' } };
+        return { content: [{ type: "text", text: JSON.stringify({ insertedId: result.insertedId }) }] };
     }
 );
 
@@ -108,7 +113,7 @@ server.tool(
     }).shape,
     async ({ databaseName, collectionName, filter, update }) => {
         const result = await client.db(databaseName).collection(collectionName).updateOne(filter, update);
-        return { structuredContent: { content: JSON.stringify({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount }), type: 'json' } };
+        return { content: [{ type: "text", text: JSON.stringify({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount }) }] };
     }
 );
 
@@ -122,14 +127,15 @@ server.tool(
     }).shape,
     async ({ databaseName, collectionName, filter }) => {
         const result = await client.db(databaseName).collection(collectionName).deleteOne(filter);
-        return { structuredContent: { content: JSON.stringify({ deletedCount: result.deletedCount }), type: 'json' } };
+        return { content: [{ type: "text", text: JSON.stringify({ deletedCount: result.deletedCount }) }] };
     }
 );
 
 async function main() {
     await connectToMongo();
-    console.log("MongoDB MCP Server tools registered. Listening via stdio.");
-}
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+};
 
 main().catch(error => {
     console.error("Failed to start server:", error);
@@ -138,7 +144,7 @@ main().catch(error => {
 });
 
 process.on('SIGINT', async () => {
-    console.log("Shutting down server...");
+    console.error("SIGINT received, shutting down server...");
     await client.close();
     process.exit(0);
 }); 
